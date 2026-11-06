@@ -5,6 +5,7 @@ let package = Package(
     name: "iSound",
     platforms: [.macOS("15.0")],
     targets: [
-        .executableTarget(name: "iSound", path: "Sources/iSound")
+        .executableTarget(name: "iSound", path: "Sources/iSound"),
+        .testTarget(name: "iSoundTests", dependencies: ["iSound"], path: "Tests/iSoundTests"),
     ]
 )
