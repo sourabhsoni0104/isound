@@ -85,6 +85,10 @@ final class MixerModel: ObservableObject {
     private var latencyWarned = Set<UUID>()
 
     private static let pendingRestoreKey = "pendingVolumeRestore"
+    /// dB the hardware volume is currently raised by, so apps above 100% get real headroom.
+    private var headroomShift: Float32 = 0
+    private var headroomDeviceUID: String?
+    private static let maxHeadroomDB: Float32 = 12
 
     private let tapLinger: TimeInterval = 10    // keep a capture alive across short pauses
     static let callApps: Set<String> = [
@@ -267,6 +271,11 @@ final class MixerModel: ObservableObject {
     func outputVolume() -> Float {
         guard let d = outputDevice else { return 0 }
         if devices.usesSoftwareVolume(d) { return devices.settings(d.uid).softwareVolume }
+        // While boosting, the hardware is turned up; show the user's own level.
+        if headroomShift != 0, headroomDeviceUID == d.uid, let cur = DeviceVolume.currentDB(d.id),
+           let scalar = DeviceVolume.convert(d.id, cur - headroomShift, toScalar: true) {
+            return scalar
+        }
         return devices.hardwareVolume(d.id) ?? 0
     }
 
@@ -281,6 +290,14 @@ final class MixerModel: ObservableObject {
         if devices.usesSoftwareVolume(d) {
             let maxV = devices.settings(d.uid).maxVolume ?? 1
             devices.update(d.uid, coalesce: "swvol") { $0.softwareVolume = min(max(v, 0), maxV); $0.softwareMuted = false }
+        } else if headroomShift != 0, headroomDeviceUID == d.uid,
+                  let userDB = DeviceVolume.convert(d.id, min(max(v, 0), 1), toScalar: false) {
+            // Keep the boost on top of the new level; if it no longer fits, shrink the boost.
+            if let now = DeviceVolume.setDB(d.id, userDB + headroomShift) { headroomShift = max(0, now - userDB) }
+            if d.id == devices.defaultOutput, devices.isMuted(d.id), v > 0 { devices.setMuted(d.id, false) }
+            savePendingRestore()
+            devices.objectWillChange.send()
+            scheduleRefresh()
         } else {
             devices.setHardwareVolume(d.id, v)
         }
@@ -381,6 +398,7 @@ final class MixerModel: ObservableObject {
         saveAUStates()
         store.saveNow()
         stopAllTaps()
+        setHeadroom(0, device: nil)   // put the hardware volume back
     }
 
     private func stopAllTaps() {
@@ -439,8 +457,11 @@ final class MixerModel: ObservableObject {
         }.map(\.identity.key))
         if callActive != !callKeys.isEmpty { callActive = !callKeys.isEmpty }
 
+        // Apps above 100%: raise the hardware volume and turn everything else down to match.
+        let compensation = updateHeadroom(groups: groups, callKeys: callKeys, now: now)
+
         // Capture and re-play each adjusted app (call apps included) with its chain.
-        updateTaps(groups: groups, callKeys: callKeys, now: now)
+        updateTaps(groups: groups, callKeys: callKeys, compensation: compensation, now: now)
 
         // 3. Rows: recent noise, playing, processed, favourites.
         let recent = prefs.recentSeconds
@@ -526,7 +547,7 @@ final class MixerModel: ObservableObject {
         return s.channelMode == .stereo && s.channelOffset == 0
     }
 
-    private func updateTaps(groups: [String: Group], callKeys: Set<String>, now: Date) {
+    private func updateTaps(groups: [String: Group], callKeys: Set<String>, compensation: Float, now: Date) {
         if Snapshot.isActive { return }   // a second copy rendering screenshots must not touch audio
         guard permission == .authorized else {
             debugOnce("_noperm", "no permission (\(String(describing: self.permission)))")
@@ -556,14 +577,9 @@ final class MixerModel: ObservableObject {
             if let f = fadeUntil[key], f <= now { fadeUntil[key] = nil }
             let fading = fadeUntil[key] != nil
 
-            // Gain: app volume × output's software volume × call boost (macOS lowers other
-            // sound during calls; the boost makes up for it).
             let devSettings = devices.settings(first.uid)
-            var gain = s.gain
-            if devices.usesSoftwareVolume(firstDevice) {
-                gain *= devSettings.softwareMuted ? 0 : devSettings.softwareVolume
-            }
-            if callActive && !isCall { gain *= prefs.callBoost }
+            var gain = desiredGain(s, isCall: isCall, device: firstDevice)
+            if first.device == devices.defaultOutput { gain *= compensation }
             gain = min(gain, Self.maxGain)
 
             let effectList = s.effects + devSettings.effects
@@ -705,6 +721,67 @@ final class MixerModel: ObservableObject {
     }
 
     // MARK: - Old call-volume cleanup
+
+    /// Gain an app should get: its volume × the output's software volume × call boost
+    /// (macOS lowers other sound during calls; the boost makes up for it).
+    private func desiredGain(_ s: SourceSettings, isCall: Bool, device: AudioDevice) -> Float {
+        var gain = s.gain
+        if devices.usesSoftwareVolume(device) {
+            let d = devices.settings(device.uid)
+            gain *= d.softwareMuted ? 0 : d.softwareVolume
+        }
+        if callActive && !isCall { gain *= prefs.callBoost }
+        return gain
+    }
+
+    /// Digital gain can't make an already-loud app louder (it just hits the limiter). So when an
+    /// app on the system output is above 100%, raise the hardware volume by up to 12 dB and turn
+    /// every app down by the same amount. Returns the factor to multiply app gains by (≤ 1).
+    private func updateHeadroom(groups: [String: Group], callKeys: Set<String>, now: Date) -> Float {
+        let device = devices.defaultOutput.flatMap { devices.device(id: $0) }
+        var wanted: Float32 = 0
+        if permission == .authorized, !Snapshot.isActive, let d = device, !devices.usesSoftwareVolume(d),
+           devices.settings(d.uid).maxVolume == nil, !devices.settings(d.uid).locked, !isOutputMuted() {
+            var loudest: Float = 1
+            for (key, g) in groups where now.timeIntervalSince(lastPlaying[key] ?? .distantPast) < tapLinger {
+                let s = setting(for: key)
+                guard outputs(for: s.output).first?.device == d.id else { continue }
+                loudest = max(loudest, desiredGain(s, isCall: callKeys.contains(key), device: d))
+                _ = g
+            }
+            if loudest > 1.01, let cur = DeviceVolume.currentDB(d.id), let maxDB = DeviceVolume.maxDB(d.id) {
+                let userDB = cur - headroomShift
+                wanted = max(0, min(20 * log10(loudest), Self.maxHeadroomDB, maxDB - userDB))
+            }
+        }
+        setHeadroom(wanted, device: device)
+        return Float(pow(10, -headroomShift / 20))
+    }
+
+    private func setHeadroom(_ wanted: Float32, device: AudioDevice?) {
+        // Output changed: undo the boost on the old device first.
+        if headroomShift != 0, headroomDeviceUID != device?.uid {
+            if let old = headroomDeviceUID.flatMap(DeviceVolume.device(withUID:)) { DeviceVolume.shift(old, by: -headroomShift) }
+            headroomShift = 0
+            headroomDeviceUID = nil
+            savePendingRestore()
+        }
+        guard let d = device, abs(wanted - headroomShift) > 0.25 else { return }
+        headroomShift += DeviceVolume.shift(d.id, by: wanted - headroomShift)
+        if abs(headroomShift) < 0.05 { headroomShift = 0 }
+        headroomDeviceUID = headroomShift == 0 ? nil : d.uid
+        dlog("headroom \(headroomShift) dB on \(d.name)")
+        savePendingRestore()
+        devices.objectWillChange.send()
+    }
+
+    private func savePendingRestore() {
+        if headroomShift != 0, let uid = headroomDeviceUID {
+            UserDefaults.standard.set(["uid": uid, "db": headroomShift], forKey: Self.pendingRestoreKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.pendingRestoreKey)
+        }
+    }
 
     /// An earlier version lowered the hardware volume during calls. If it quit mid-call, undo that.
     private func restoreVolumeAfterCrash() {

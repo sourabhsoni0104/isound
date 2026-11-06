@@ -114,6 +114,36 @@ enum DeviceVolume {
         return applied
     }
 
+    /// Loudest channel's level in dB.
+    static func currentDB(_ device: AudioDeviceID) -> Float32? {
+        elements(device).compactMap { decibels(device, $0) }.max()
+    }
+
+    static func maxDB(_ device: AudioDeviceID) -> Float32? {
+        elements(device).first.flatMap { range(device, $0) }.map { Float32($0.mMaximum) }
+    }
+
+    /// Converts between the volume slider position (0…1) and dB using the device's own curve.
+    static func convert(_ device: AudioDeviceID, _ value: Float32, toScalar: Bool) -> Float32? {
+        guard let el = elements(device).first else { return nil }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: toScalar ? kAudioDevicePropertyVolumeDecibelsToScalar : kAudioDevicePropertyVolumeScalarToDecibels,
+            mScope: kAudioObjectPropertyScopeOutput, mElement: el)
+        var v = value
+        var size = UInt32(MemoryLayout<Float32>.size)
+        return AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &v) == noErr ? v : nil
+    }
+
+    /// Sets every channel to `db` (clamped). Returns the resulting level.
+    @discardableResult
+    static func setDB(_ device: AudioDeviceID, _ db: Float32) -> Float32? {
+        for el in elements(device) {
+            guard let r = range(device, el) else { continue }
+            setDecibels(device, el, min(max(db, Float32(r.mMinimum)), Float32(r.mMaximum)))
+        }
+        return currentDB(device)
+    }
+
     static func device(withUID uid: String) -> AudioDeviceID? {
         CA.getIDs(CA.system, kAudioHardwarePropertyDevices).first { CA.deviceUID($0) == uid }
     }

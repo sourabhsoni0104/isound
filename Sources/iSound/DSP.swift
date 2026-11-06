@@ -222,7 +222,7 @@ final class ChainEngine {
         self.auSlots = auSlots
         lookahead = min(Self.ring / 2, max(16, Int(0.0025 * sampleRate)))
         attackCoeff = Float(exp(-1.0 / (Double(lookahead) / 5)))
-        releaseCoeff = Float(exp(-1.0 / (0.2 * max(sampleRate, 8000))))
+        releaseCoeff = Float(exp(-1.0 / (0.1 * max(sampleRate, 8000))))
         dl = .allocate(capacity: Self.ring); dl.initialize(repeating: 0, count: Self.ring)
         dr = .allocate(capacity: Self.ring); dr.initialize(repeating: 0, count: Self.ring)
         dqVal = .allocate(capacity: Self.ring); dqVal.initialize(repeating: 1, count: Self.ring)
