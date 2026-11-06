@@ -193,3 +193,75 @@ struct PercentText: View {
 extension Float {
     var percent: String { "\(Int((self * 100).rounded()))%" }
 }
+
+// MARK: - Slider
+
+/// A slider whose knob lands exactly where you click or drag, with snap marks (e.g. 100%).
+struct VolumeSlider: View {
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...1
+    var marks: [Double] = []
+    var label: String = "Volume"
+    var step: Double = 0.05
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var dragging = false
+
+    private let knob: CGFloat = 16
+
+    var body: some View {
+        GeometryReader { g in
+            let usable = max(1, g.size.width - knob)
+            let x = usable * CGFloat(fraction(value))
+            ZStack(alignment: .leading) {
+                Capsule().fill(.primary.opacity(0.12)).frame(height: 5)
+                Capsule().fill(isEnabled ? Color.accentColor : Color.secondary)
+                    .frame(width: x + knob / 2, height: 5)
+                ForEach(marks, id: \.self) { m in
+                    Capsule().fill(.primary.opacity(0.35))
+                        .frame(width: 2, height: 10)
+                        .offset(x: usable * CGFloat(fraction(m)) + knob / 2 - 1)
+                }
+                Circle()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
+                    .overlay(Circle().strokeBorder(.black.opacity(0.08), lineWidth: 0.5))
+                    .frame(width: knob, height: knob)
+                    .scaleEffect(dragging ? 1.15 : 1)
+                    .offset(x: x)
+                    .animation(.snappy(duration: 0.12), value: dragging)
+            }
+            .frame(width: g.size.width, height: g.size.height)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    dragging = true
+                    set(fraction: Double((v.location.x - knob / 2) / usable))
+                }
+                .onEnded { _ in dragging = false })
+        }
+        .frame(height: 22)
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityElement()
+        .accessibilityLabel(label)
+        .accessibilityValue("\(Int((value * 100).rounded()))%")
+        .accessibilityAdjustableAction { dir in
+            switch dir {
+            case .increment: value = min(range.upperBound, value + step)
+            case .decrement: value = max(range.lowerBound, value - step)
+            @unknown default: break
+            }
+        }
+    }
+
+    private func fraction(_ v: Double) -> Double {
+        min(max((v - range.lowerBound) / (range.upperBound - range.lowerBound), 0), 1)
+    }
+
+    private func set(fraction f: Double) {
+        let f = min(max(f, 0), 1)
+        var v = range.lowerBound + f * (range.upperBound - range.lowerBound)
+        // Snap to marks when within 1.5% of the track.
+        for m in marks where abs(fraction(m) - f) < 0.015 { v = m }
+        if v != value { value = v }
+    }
+}

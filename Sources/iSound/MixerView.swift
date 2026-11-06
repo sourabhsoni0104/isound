@@ -212,9 +212,8 @@ struct OutputCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(muted ? "Unmute output" : "Mute output")
-                Slider(value: Binding(get: { Double(model.outputVolume()) }, set: { model.setOutputVolume(Float($0)) }), in: 0...1)
-                    .controlSize(.small)
-                    .accessibilityLabel("Output volume")
+                VolumeSlider(value: Binding(get: { Double(model.outputVolume()) }, set: { model.setOutputVolume(Float($0)) }),
+                             label: "Output volume")
                 PercentText(value: model.outputVolume())
             }
             if store.state.prefs.showMeters { LevelMeter(level: model.outputLevel).padding(.leading, 32).padding(.trailing, 50) }
@@ -255,9 +254,8 @@ struct InputCard: View {
                 .buttonStyle(.plain)
                 .help("Mute microphone")
                 .accessibilityLabel(muted ? "Unmute microphone" : "Mute microphone")
-                Slider(value: Binding(get: { Double(model.inputVolume()) }, set: { model.setInputVolume(Float($0)) }), in: 0...1)
-                    .controlSize(.small)
-                    .accessibilityLabel("Microphone volume")
+                VolumeSlider(value: Binding(get: { Double(model.inputVolume()) }, set: { model.setInputVolume(Float($0)) }),
+                             label: "Microphone volume")
                 PercentText(value: model.inputVolume())
             }
             if store.state.prefs.showInputMeter { LevelMeter(level: model.inputLevel).padding(.leading, 32).padding(.trailing, 50) }
@@ -312,19 +310,17 @@ struct CallBoostCard: View {
             HStack(spacing: 8) {
                 SectionLabel(title: "During calls", symbol: "phone")
                 Spacer()
-                Text("boost other apps").font(.caption).foregroundStyle(.secondary)
+                Text("overall boost").font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 10) {
                 Image(systemName: "speaker.plus").frame(width: 22).foregroundStyle(.secondary)
-                Slider(value: Binding(get: { Double(store.state.prefs.callBoost) },
-                                      set: { v in model.setPrefs { $0.callBoost = Float((v * 20).rounded() / 20) } }),
-                       in: 1...4)
-                    .controlSize(.small)
-                    .accessibilityLabel("Boost other apps during calls")
+                VolumeSlider(value: Binding(get: { Double(store.state.prefs.callBoost) },
+                                            set: { v in model.setPrefs { $0.callBoost = Float((v * 20).rounded() / 20) } }),
+                             range: 1...8, marks: [2, 4], label: "Overall boost during calls")
                 PercentText(value: store.state.prefs.callBoost, warnAbove: 4)
             }
         }
-        .help("macOS turns other sound down during calls (WhatsApp, FaceTime, Zoom…). This raises your other apps to make up for it.")
+        .help("macOS turns sound down during calls (WhatsApp, FaceTime, Zoom…). This raises everything back up by the same amount, so each app's own slider sets how loud it is.")
     }
 }
 

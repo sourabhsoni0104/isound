@@ -58,11 +58,9 @@ struct AppRowView: View {
 
             // Line 2: full-width volume slider with the level meter underneath
             VStack(spacing: 3) {
-                Slider(value: Binding(get: { Double(s.volume) }, set: { model.setVolume(Float($0), for: row.id) }), in: 0...4)
-                    .controlSize(.small)
+                VolumeSlider(value: Binding(get: { Double(s.volume) }, set: { model.setVolume(Float($0), for: row.id) }),
+                             range: 0...4, marks: [1], label: "\(row.name) volume")
                     .disabled(s.muted)
-                    .accessibilityLabel("\(row.name) volume")
-                    .accessibilityValue(s.volume.percent)
                 if store.state.prefs.showMeters && row.isRunning {
                     LevelMeter(level: model.levels[row.id] ?? 0, outlined: !row.isPlaying)
                 }
