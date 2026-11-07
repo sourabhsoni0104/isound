@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/AppIcon.png" width="128" alt="iSound icon"></p>
+
 # iSound
 
 A per-app volume mixer that lives in the macOS menu bar.

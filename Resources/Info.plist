@@ -2,20 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>iSound</string>
-    <key>CFBundleDisplayName</key><string>iSound</string>
-    <key>CFBundleIdentifier</key><string>com.sourabh.isound</string>
-    <key>CFBundleExecutable</key><string>iSound</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>15.0</string>
-    <key>LSUIElement</key><true/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>iSound shows a microphone level meter when you turn it on.</string>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>iSound can reconnect your Bluetooth headphones after your Mac wakes up.</string>
-    <key>NSAudioCaptureUsageDescription</key>
-    <string>iSound needs to capture each app's audio so it can change that app's volume.</string>
+	<key>CFBundleDisplayName</key>
+	<string>iSound</string>
+	<key>CFBundleExecutable</key>
+	<string>iSound</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.sourabh.isound</string>
+	<key>CFBundleName</key>
+	<string>iSound</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>iSound needs to capture each app's audio so it can change that app's volume.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>iSound can reconnect your Bluetooth headphones after your Mac wakes up.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>iSound shows a microphone level meter when you turn it on.</string>
 </dict>
 </plist>
