@@ -40,15 +40,25 @@ It started with a simple annoyance: on a WhatsApp or FaceTime call, macOS turns 
 - Level meters, a compact view, undo/redo, accent colors, light and dark mode
 - Liquid Glass on macOS 26, with full keyboard navigation and VoiceOver labels
 
+## Install
+
+1. Download `iSound-1.0.dmg` from the [latest release](https://github.com/sourabhsoni0104/isound/releases/latest).
+2. Open it and drag **iSound** into **Applications**.
+3. Open iSound. The app isn't notarized by Apple yet, so the first time macOS will block it. Go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. Or run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/iSound.app
+   ```
+
 ## Requirements
 
 - macOS 15 or later (per-app audio uses Core Audio process taps)
 - Xcode command-line tools / Swift 5.9+
 
-## Build and run
+## Build from source
 
 ```bash
-./build.sh
+./build.sh          # builds build/iSound.app
+./make-dmg.sh       # builds build/iSound-<version>.dmg
 open build/iSound.app
 ```
 
